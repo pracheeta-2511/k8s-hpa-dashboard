@@ -112,7 +112,7 @@ minikube stop
 ## Screenshots
 
 ### Live Dashboard
-![Dashboard](screenshots/1.png)
+![Dashboard](hpa-final/screenshots/1.png)
 
 ### Pod Scaling Under Load
 ![Scaling](hpa-final/screenshots/2.png)
