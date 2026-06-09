@@ -1,5 +1,4 @@
 # k8s-hpa-dashboard
-## Run everything from VS Code terminal
 
 ---
 
