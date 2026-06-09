@@ -109,3 +109,16 @@ kubectl delete -f k8s/webapp.yaml
 kubectl delete -f k8s/load-generator.yaml
 minikube stop
 ```
+## Screenshots
+
+### Live Dashboard
+![Dashboard](screenshots/1.png)
+
+### Pod Scaling Under Load
+![Scaling](screenshots/2.png)
+
+### Pod Scaling stops after threshold
+![Scaling](screenshots/3.png)
+
+### Pod Downscaling Under Load
+![Scaling](screenshots/4.png)
