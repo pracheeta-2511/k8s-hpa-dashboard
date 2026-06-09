@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: webapp
+  namespace: default
+  labels:
+    app: webapp
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: webapp
+  template:
+    metadata:
+      labels:
+        app: webapp
+    spec:
+      containers:
+      - name: webapp
+        image: k8s.gcr.io/hpa-example
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: "100m"      # lowered so CPU spikes faster
+            memory: "64Mi"
+          limits:
+            cpu: "200m"      # lowered so CPU hits limit faster
+            memory: "128Mi"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: webapp-service
+  namespace: default
+spec:
+  selector:
+    app: webapp
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+  type: ClusterIP
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: webapp-hpa
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: webapp
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 30    # lower target = scales up sooner
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0    # scale up INSTANTLY
+      policies:
+      - type: Pods
+        value: 4                       # add 4 pods at once
+        periodSeconds: 5               # every 5 seconds
+    scaleDown:
+      stabilizationWindowSeconds: 10   # scale down after just 10s
+      policies:
+      - type: Pods
+        value: 2                       # remove 2 pods at once
+        periodSeconds: 5

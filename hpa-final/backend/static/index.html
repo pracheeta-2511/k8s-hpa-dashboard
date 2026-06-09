@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>K8s HPA — Live Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700&family=Orbitron:wght@700;900&display=swap');
+:root{
+  --bg:#04080d;--bg2:#080f18;--bg3:#0a1520;--border:#0c2e47;
+  --accent:#00d4ff;--g:#00ff9d;--warn:#ffcc00;--danger:#ff3d5a;
+  --text:#90b8d0;--dim:#2e4a60;
+  --gA:0 0 14px #00d4ff33;--gG:0 0 14px #00ff9d33;--gR:0 0 14px #ff3d5a33;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--text);font-family:'Rajdhani',sans-serif;display:flex;flex-direction:column;height:100vh}
+body::before{content:'';position:fixed;inset:0;background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,212,255,.008) 2px,rgba(0,212,255,.008) 4px);pointer-events:none;z-index:9999}
+body::after{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,255,.025) 1px,transparent 1px);background-size:40px 40px;pointer-events:none;z-index:0}
+header{position:relative;z-index:10;display:flex;align-items:center;justify-content:space-between;padding:6px 16px;border-bottom:1px solid var(--border);background:#060d16;flex-shrink:0;height:44px}
+.logo{display:flex;align-items:center;gap:8px}
+.logo-hex{width:28px;height:28px;background:linear-gradient(135deg,#00d4ff,#0055cc);clip-path:polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%);display:flex;align-items:center;justify-content:center;font-size:12px;animation:hexPulse 3s ease-in-out infinite;box-shadow:0 0 20px #00d4ff33}
+@keyframes hexPulse{0%,100%{box-shadow:0 0 20px #00d4ff33}50%{box-shadow:0 0 35px #00d4ff77}}
+.logo h1{font-family:'Orbitron',monospace;font-size:12px;font-weight:900;color:var(--accent);letter-spacing:3px}
+.logo p{font-size:8px;color:var(--dim);letter-spacing:2px;margin-left:2px}
+.hdr-mid{display:flex;gap:24px;align-items:center}
+.hs{text-align:center}
+.hs-v{font-family:'Orbitron',monospace;font-size:13px;color:var(--accent)}
+.hs-l{font-size:8px;color:var(--dim);letter-spacing:1px}
+.ws-pill{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid;border-radius:2px;font-size:9px;letter-spacing:1px}
+.ws-pill.connected{border-color:var(--g);color:var(--g);background:rgba(0,255,157,.04)}
+.ws-pill.disconnected{border-color:var(--danger);color:var(--danger);background:rgba(255,61,90,.04)}
+.ws-dot{width:6px;height:6px;border-radius:50%;animation:blink 1s step-end infinite}
+.ws-pill.connected .ws-dot{background:var(--g);box-shadow:0 0 6px var(--g)}
+.ws-pill.disconnected .ws-dot{background:var(--danger)}
+@keyframes blink{50%{opacity:0}}
+main{position:relative;z-index:10;flex:1;display:grid;grid-template-columns:2fr 1.1fr 1fr;grid-template-rows:1fr 1fr 1fr;gap:8px;padding:8px 10px;min-height:0}
+.panel{background:var(--bg2);border:1px solid var(--border);border-radius:3px;padding:8px 10px;position:relative;overflow:hidden;min-height:0}
+.panel::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--accent),transparent);opacity:.4}
+.pt{font-family:'Orbitron',monospace;font-size:8px;font-weight:700;color:var(--accent);letter-spacing:2px;margin-bottom:6px;display:flex;align-items:center;gap:5px;flex-shrink:0}
+.pt .d{width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.cpu-panel{grid-column:1;grid-row:1}
+#cpuCanvas{width:100%;display:block}
+.chart-leg{display:flex;gap:10px;margin-top:3px;font-size:8px;flex-shrink:0}
+.li{display:flex;align-items:center;gap:4px}
+.ld{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.pods-panel{grid-column:2;grid-row:1}
+#podsGrid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px}
+.pod{aspect-ratio:1;border-radius:2px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:6px;font-family:'Share Tech Mono',monospace;transition:all .4s cubic-bezier(.34,1.56,.64,1)}
+.pod.running{background:rgba(0,255,157,.1);border:1px solid rgba(0,255,157,.4);color:var(--g)}
+.pod.pending{background:rgba(255,204,0,.1);border:1px solid rgba(255,204,0,.35);color:var(--warn);animation:pp .8s ease-in-out infinite}
+.pod.spawn{background:rgba(0,212,255,.14);border:1px solid var(--accent);color:var(--accent);animation:ps .4s ease-out}
+@keyframes ps{0%{transform:scale(0) rotate(45deg);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes pp{0%,100%{opacity:1}50%{opacity:.4}}
+.pod-i{font-size:11px}.pod-n{font-size:5px;opacity:.6}
+.pods-foot{display:flex;justify-content:space-between;margin-top:5px;font-size:9px;color:var(--dim)}
+.metrics-panel{grid-column:3;grid-row:1}
+.met-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;height:calc(100% - 22px)}
+.met-box{background:var(--bg3);border:1px solid var(--border);border-radius:2px;padding:6px 8px;display:flex;flex-direction:column;justify-content:center}
+.met-n{font-size:8px;color:var(--dim);letter-spacing:1px;margin-bottom:1px}
+.met-v{font-family:'Orbitron',monospace;font-size:16px}
+.met-v.g{color:var(--g)}.met-v.b{color:var(--accent)}.met-v.w{color:var(--warn)}.met-v.r{color:var(--danger)}
+.hpa-panel{grid-column:1;grid-row:2}
+.hpa-inner{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:5px;margin-bottom:5px}
+.cfg-box{background:var(--bg3);border:1px solid var(--border);border-radius:2px;padding:5px 7px}
+.cfg-lbl{font-size:7px;color:var(--dim);letter-spacing:1px;margin-bottom:1px}
+.cfg-v{font-family:'Orbitron',monospace;font-size:14px}
+.cfg-v.g{color:var(--g)}.cfg-v.w{color:var(--warn)}.cfg-v.b{color:var(--accent)}.cfg-v.r{color:var(--danger)}
+.yaml-box{background:#020609;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;line-height:1.6;color:var(--dim);overflow:hidden;height:calc(100% - 54px)}
+.yk{color:#5fb3ff}.yv{color:var(--g)}.ys{color:#ffaa55}.yc{color:#273d50}.yh{color:var(--accent);font-weight:bold}
+.load-panel{grid-column:2;grid-row:2}
+.load-btns{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px}
+.lbtn{padding:7px 4px;border-radius:2px;border:1px solid;background:var(--bg3);font-family:'Rajdhani',sans-serif;font-size:11px;font-weight:700;letter-spacing:1px;cursor:pointer;transition:all .2s;text-align:center}
+.lbtn.start{border-color:var(--g);color:var(--g)}.lbtn.start:hover{background:rgba(0,255,157,.08);box-shadow:var(--gG)}
+.lbtn.stop{border-color:var(--danger);color:var(--danger)}.lbtn.stop:hover{background:rgba(255,61,90,.08);box-shadow:var(--gR)}
+.load-stat{background:var(--bg3);border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;margin-bottom:5px}
+.active-txt{color:var(--g)}.idle-txt{color:var(--dim)}
+.load-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.mini-box{background:var(--bg3);border:1px solid var(--border);border-radius:2px;padding:5px 7px}
+.mini-l{font-size:7px;color:var(--dim);letter-spacing:1px;margin-bottom:1px}
+.mini-v{font-family:'Orbitron',monospace;font-size:14px;color:var(--accent)}
+.dec-panel{grid-column:3;grid-row:2}
+.dec-flow{display:flex;flex-direction:column;gap:4px;height:calc(100% - 22px);justify-content:center}
+.df-row{display:flex;align-items:center;gap:4px}
+.df-n{background:var(--bg3);border:1px solid var(--border);border-radius:2px;padding:5px 8px;flex:1;transition:all .3s}
+.df-n.active{border-color:var(--accent);box-shadow:var(--gA)}
+.df-n.trigger{border-color:var(--warn);box-shadow:0 0 10px #ffcc0022}
+.df-n.action-up{border-color:var(--g);box-shadow:var(--gG)}
+.df-n.action-dn{border-color:var(--danger);box-shadow:var(--gR)}
+.df-lbl{font-size:7px;color:var(--dim);letter-spacing:1px}
+.df-v{font-family:'Orbitron',monospace;font-size:11px;color:var(--text)}
+.df-arr{color:var(--dim);font-size:10px;opacity:.5;flex-shrink:0}
+.kc-panel{grid-column:1;grid-row:3}
+.kc-tabs{display:flex;gap:5px;margin-bottom:5px}
+.kc-tab{padding:2px 8px;border:1px solid var(--border);border-radius:2px;font-size:8px;letter-spacing:1px;cursor:pointer;color:var(--dim);background:var(--bg3);transition:all .2s}
+.kc-tab.active{border-color:var(--accent);color:var(--accent);background:rgba(0,212,255,.06)}
+.kc-out{background:#020609;border:1px solid var(--border);border-radius:2px;padding:6px 8px;font-family:'Share Tech Mono',monospace;font-size:9px;line-height:1.7;height:calc(100% - 38px);overflow-y:auto;color:var(--dim)}
+.ev-panel{grid-column:2/4;grid-row:3}
+#evLog{display:flex;flex-direction:column;gap:2px;height:calc(100% - 22px);overflow-y:auto;font-family:'Share Tech Mono',monospace;font-size:9px}
+.ev-row{display:flex;gap:8px;align-items:center;padding:3px 7px;background:var(--bg3);border-radius:2px;border-left:2px solid var(--border);animation:si .2s ease;flex-shrink:0}
+@keyframes si{from{transform:translateX(-4px);opacity:0}}
+.ev-row.up{border-left-color:var(--accent)}.ev-row.dn{border-left-color:var(--danger)}.ev-row.wn{border-left-color:var(--warn)}.ev-row.info{border-left-color:var(--dim)}
+.ev-t{color:var(--dim);min-width:58px;font-size:8px}
+.ev-k{min-width:72px;padding:1px 4px;border-radius:2px;font-size:7px;letter-spacing:1px;text-align:center}
+.ev-k.up{background:rgba(0,212,255,.1);color:var(--accent)}.ev-k.dn{background:rgba(255,61,90,.1);color:var(--danger)}.ev-k.wn{background:rgba(255,204,0,.1);color:var(--warn)}.ev-k.info{background:rgba(176,207,232,.06);color:var(--dim)}
+.ev-m{color:var(--text);flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#errBanner{display:none;position:fixed;top:44px;left:0;right:0;z-index:100;background:rgba(255,61,90,.15);border-bottom:1px solid var(--danger);padding:4px 16px;font-size:10px;color:var(--danger)}
+::-webkit-scrollbar{width:2px;height:2px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border);border-radius:1px}
+</style>
+</head>
+<body>
+<div id="errBanner"></div>
+<header>
+  <div class="logo">
+    <div class="logo-hex">⎈</div>
+    <div><h1>K8S · HPA DASHBOARD</h1><p>HORIZONTAL POD AUTOSCALER · MINIKUBE · LIVE</p></div>
+  </div>
+  <div class="hdr-mid">
+    <div class="hs"><div class="hs-v" id="hUptime">00:00:00</div><div class="hs-l">UPTIME</div></div>
+    <div class="hs"><div class="hs-v" id="hScales">0</div><div class="hs-l">SCALE EVENTS</div></div>
+    <div class="hs"><div class="hs-v" id="hPoll">—</div><div class="hs-l">LAST POLL</div></div>
+    <div class="hs"><div class="hs-v" id="hPods" style="color:var(--g)">—</div><div class="hs-l">PODS</div></div>
+    <div class="hs"><div class="hs-v" id="hCPU">—</div><div class="hs-l">CPU</div></div>
+  </div>
+  <div class="ws-pill disconnected" id="wsPill"><div class="ws-dot"></div><span id="wsLbl">CONNECTING…</span></div>
+</header>
+<main>
+  <div class="panel cpu-panel">
+    <div class="pt"><div class="d"></div>CPU UTILIZATION — LIVE FROM metrics-server</div>
+    <canvas id="cpuCanvas"></canvas>
+    <div class="chart-leg">
+      <div class="li"><div class="ld" style="background:#00d4ff"></div>CPU %</div>
+      <div class="li"><div class="ld" style="background:#ffcc00;border-radius:0"></div>Scale-up 70%</div>
+      <div class="li"><div class="ld" style="background:#00ff9d"></div>Target 50%</div>
+      <span style="margin-left:auto;font-size:8px;color:var(--dim)">POLL 3s · metrics-server</span>
+    </div>
+  </div>
+  <div class="panel pods-panel">
+    <div class="pt"><div class="d"></div>PODS — <span id="podTit" style="color:var(--g)">—</span> RUNNING</div>
+    <div id="podsGrid"></div>
+    <div class="pods-foot">
+      <span>MIN:<span style="color:var(--g)" id="pMin"> 2</span></span>
+      <span>NOW:<span style="color:var(--accent)" id="pNow"> —</span></span>
+      <span>DES:<span style="color:var(--warn)" id="pDes"> —</span></span>
+      <span>MAX:<span style="color:var(--danger)" id="pMax"> 10</span></span>
+    </div>
+  </div>
+  <div class="panel metrics-panel">
+    <div class="pt"><div class="d"></div>LIVE METRICS</div>
+    <div class="met-grid">
+      <div class="met-box"><div class="met-n">CPU UTIL</div><div class="met-v b" id="mCPU">—</div></div>
+      <div class="met-box"><div class="met-n">ACTIVE PODS</div><div class="met-v g" id="mPods">—</div></div>
+      <div class="met-box"><div class="met-n">DESIRED</div><div class="met-v w" id="mDes">—</div></div>
+      <div class="met-box"><div class="met-n">SCALE EVENTS</div><div class="met-v b" id="mSE">0</div></div>
+    </div>
+  </div>
+  <div class="panel hpa-panel">
+    <div class="pt"><div class="d"></div>HPA SPEC — webapp-hpa</div>
+    <div class="hpa-inner">
+      <div class="cfg-box"><div class="cfg-lbl">MIN PODS</div><div class="cfg-v g" id="cMin">2</div></div>
+      <div class="cfg-box"><div class="cfg-lbl">MAX PODS</div><div class="cfg-v w" id="cMax">10</div></div>
+      <div class="cfg-box"><div class="cfg-lbl">TARGET CPU</div><div class="cfg-v b" id="cTgt">50%</div></div>
+      <div class="cfg-box"><div class="cfg-lbl">CURRENT CPU</div><div class="cfg-v b" id="cCur">—</div></div>
+    </div>
+    <div class="yaml-box">
+<span class="yc"># k8s/webapp.yaml</span>
+<span class="yk">kind:</span> <span class="ys">HorizontalPodAutoscaler</span>
+<span class="yk">metadata.name:</span> <span class="ys">webapp-hpa</span>
+<span class="yh">minReplicas:</span> <span class="yv" id="yMin">2</span>  <span class="yh">maxReplicas:</span> <span class="yv" id="yMax">10</span>
+<span class="yk">metrics.cpu</span>
+  <span class="yh">averageUtilization:</span> <span class="yv" id="yTgt">50</span>
+<span class="yk">scaleUp.stabilization:</span>   <span class="yv">15s</span>
+<span class="yk">scaleDown.stabilization:</span> <span class="yv">30s</span>
+    </div>
+  </div>
+  <div class="panel load-panel">
+    <div class="pt"><div class="d"></div>LOAD GENERATOR</div>
+    <div class="load-btns">
+      <button class="lbtn start" onclick="sendAction('start_load')">▶ START LOAD</button>
+      <button class="lbtn stop"  onclick="sendAction('stop_load')">■ STOP LOAD</button>
+    </div>
+    <div class="load-stat" id="loadStat"><span class="idle-txt">● IDLE</span></div>
+    <div class="load-grid">
+      <div class="mini-box"><div class="mini-l">CURRENT PODS</div><div class="mini-v" id="l2P">—</div></div>
+      <div class="mini-box"><div class="mini-l">DESIRED PODS</div><div class="mini-v" id="l2D">—</div></div>
+    </div>
+  </div>
+  <div class="panel dec-panel">
+    <div class="pt"><div class="d"></div>HPA DECISION PIPELINE</div>
+    <div class="dec-flow">
+      <div class="df-row">
+        <div class="df-n active" id="dfM"><div class="df-lbl">METRICS</div><div class="df-v" id="dfCV">—</div></div>
+        <div class="df-arr">→</div>
+        <div class="df-n" id="dfT"><div class="df-lbl">TARGET</div><div class="df-v" id="dfTV">50%</div></div>
+      </div>
+      <div class="df-row">
+        <div class="df-n" id="dfR"><div class="df-lbl">RATIO</div><div class="df-v" id="dfRV">—</div></div>
+        <div class="df-arr">→</div>
+        <div class="df-n" id="dfD"><div class="df-lbl">DESIRED</div><div class="df-v" id="dfDV">—</div></div>
+      </div>
+      <div class="df-row">
+        <div class="df-n" id="dfA" style="flex:1"><div class="df-lbl">HPA ACTION</div><div class="df-v" id="dfAV">HOLD</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="panel kc-panel">
+    <div class="pt"><div class="d"></div>kubectl OUTPUT</div>
+    <div class="kc-tabs">
+      <div class="kc-tab active" onclick="setTab('raw',this)">get hpa</div>
+      <div class="kc-tab" onclick="setTab('top',this)">top pods</div>
+    </div>
+    <div class="kc-out" id="kcOut"><span style="color:var(--dim)">Connecting…</span></div>
+  </div>
+  <div class="panel ev-panel">
+    <div class="pt"><div class="d"></div>KUBERNETES EVENTS · HPA LOG</div>
+    <div id="evLog"></div>
+  </div>
+</main>
+<script>
+const WS_URL=`ws://${location.hostname}:8000/ws`;
+let ws,retryT,t0=Date.now(),scaleN=0,prevPods=0,kcTab='raw',lastPoll=null,_d=null;
+const cpuH=[],HLEN=60,renderedPods=[],seenEv=new Set();
+function connect(){clearTimeout(retryT);ws=new WebSocket(WS_URL);ws.onopen=()=>{badge(true);log('WebSocket connected — live kubectl data flowing','info','WS');};ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.type==='metrics')apply(m.data);if(m.type==='action_result')log(m.message,'info','ACTION');};ws.onclose=()=>{badge(false);retryT=setTimeout(connect,3000);};ws.onerror=()=>ws.close();}
+function sendAction(a){if(ws&&ws.readyState===1)ws.send(JSON.stringify({action:a}));}
+function badge(ok){const el=document.getElementById('wsPill');el.className='ws-pill '+(ok?'connected':'disconnected');document.getElementById('wsLbl').textContent=ok?'LIVE · MINIKUBE':'RECONNECTING…';}
+function apply(d){
+  lastPoll=Date.now();_d=d;
+  const cpu=d.cpu_current,pods=d.pods_current,des=d.pods_desired,tgt=d.cpu_target;
+  const eb=document.getElementById('errBanner');
+  if(d.error){eb.style.display='block';eb.textContent='⚠ '+d.error;}else eb.style.display='none';
+  if(cpu>=0){cpuH.push(cpu);if(cpuH.length>HLEN)cpuH.shift();}
+  if(prevPods!==0&&pods!==prevPods){scaleN++;const dir=pods>prevPods?'up':'dn';log(`Pods ${prevPods}→${pods} | CPU:${cpu>=0?cpu+'%':'?'} target:${tgt}%`,dir,pods>prevPods?'SCALE UP':'SCALE DN');set('hScales',scaleN);set('mSE',scaleN);}
+  prevPods=pods;
+  set('hPods',pods);set('hCPU',cpu>=0?cpu+'%':'…');document.getElementById('hCPU').style.color=cpuC(cpu);
+  set('cMin',d.pods_min);set('cMax',d.pods_max);set('cTgt',tgt+'%');set('cCur',cpu>=0?cpu+'%':'…');cls('cCur','cfg-v '+cpuC2(cpu));
+  set('yMin',d.pods_min);set('yMax',d.pods_max);set('yTgt',tgt);
+  set('pMin',d.pods_min);set('pMax',d.pods_max);set('pNow',pods);set('pDes',des);set('podTit',pods);
+  set('mCPU',cpu>=0?cpu+'%':'…');cls('mCPU','met-v '+cpuC2(cpu));set('mPods',pods);set('mDes',des);
+  set('l2P',pods);set('l2D',des);
+  document.getElementById('loadStat').innerHTML=d.load_active?'<span class="active-txt">● ACTIVE — CPU rising…</span>':'<span class="idle-txt">● IDLE</span>';
+  const ratio=cpu>=0&&tgt>0?(cpu/tgt).toFixed(2):'—';
+  set('dfCV',cpu>=0?cpu+'%':'…');set('dfTV',tgt+'%');set('dfRV',ratio);set('dfDV',des);
+  document.getElementById('dfM').className='df-n '+(cpu>70?'trigger':'active');
+  let act='HOLD',ac='';
+  if(des>pods){act=`↑ ${pods}→${des}`;ac='action-up';}else if(des<pods){act=`↓ ${pods}→${des}`;ac='action-dn';}
+  set('dfAV',act);document.getElementById('dfA').className='df-n '+ac;
+  renderPods(d.pod_list);renderKc(d);
+  if(d.events&&d.events.length)d.events.forEach(ev=>{const t=(ev.reason||'').toLowerCase().includes('scale')?'wn':'info';log(ev.message,t,ev.reason||'K8S',ev.time,true);});
+  drawChart();
+}
+function cpuC(v){return v<0?'var(--accent)':v>70?'var(--danger)':v>50?'var(--warn)':'var(--accent)';}
+function cpuC2(v){return v<0?'b':v>70?'r':v>50?'w':'b';}
+function set(id,v){const e=document.getElementById(id);if(e)e.textContent=v;}
+function cls(id,c){const e=document.getElementById(id);if(e)e.className=c;}
+function renderPods(list){
+  const g=document.getElementById('podsGrid');
+  const names=list.map(p=>p.name);
+  renderedPods.filter(n=>!names.includes(n)).forEach(n=>{const e=document.getElementById('p-'+n.replace(/[^a-z0-9]/gi,'-'));if(e)e.remove();});
+  list.forEach(p=>{const sid='p-'+p.name.replace(/[^a-z0-9]/gi,'-');let e=document.getElementById(sid);if(!e){e=document.createElement('div');e.id=sid;e.className='pod spawn';e.innerHTML=`<div class="pod-i">◈</div><div class="pod-n">${p.name.slice(-5)}</div>`;g.appendChild(e);}setTimeout(()=>{e.className='pod '+(p.phase==='Running'?'running':'pending');},400);});
+  renderedPods.length=0;names.forEach(n=>renderedPods.push(n));
+}
+function setTab(t,el){kcTab=t;document.querySelectorAll('.kc-tab').forEach(x=>x.classList.remove('active'));el.classList.add('active');if(_d)renderKc(_d);}
+function renderKc(d){const o=document.getElementById('kcOut');const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');o.innerHTML=kcTab==='raw'?`<span style="color:var(--g)">$</span> <span style="color:#fff">kubectl get hpa webapp-hpa</span>\n`+esc(d.kubectl_raw||'(waiting…)') :`<span style="color:var(--g)">$</span> <span style="color:#fff">kubectl top pods -l app=webapp</span>\n`+esc(d.top_raw||'(metrics-server warming up…)');}
+function log(msg,type,kind,ts,dedup){type=type||'info';kind=kind||'EVENT';const k=kind+'|'+msg;if(dedup&&seenEv.has(k))return;seenEv.add(k);if(seenEv.size>400)seenEv.clear();const el=document.getElementById('evLog');const t=ts?new Date(ts).toTimeString().slice(0,8):new Date().toTimeString().slice(0,8);const r=document.createElement('div');r.className=`ev-row ${type}`;r.innerHTML=`<span class="ev-t">${t}</span><span class="ev-k ${type}">${kind}</span><span class="ev-m">${msg}</span>`;el.insertBefore(r,el.firstChild);while(el.children.length>25)el.removeChild(el.lastChild);}
+const CC=document.getElementById('cpuCanvas');
+const CX=CC.getContext('2d');
+function sizeChart(){const panel=CC.closest('.cpu-panel');const leg=panel.querySelector('.chart-leg');const pt=panel.querySelector('.pt');CC.width=panel.clientWidth-20;CC.height=Math.max(40,panel.clientHeight-pt.offsetHeight-leg.offsetHeight-22);}
+function drawChart(){const w=CC.width,h=CC.height;CX.clearRect(0,0,w,h);CX.strokeStyle='rgba(12,46,71,.7)';CX.lineWidth=1;[0,25,50,75,100].forEach(y=>{const py=h-(y/100)*h;CX.beginPath();CX.moveTo(0,py);CX.lineTo(w,py);CX.stroke();CX.fillStyle='rgba(46,74,96,.8)';CX.font='8px Share Tech Mono';CX.fillText(y+'%',2,py-2);});if(cpuH.length<2){CX.fillStyle='rgba(0,212,255,.25)';CX.font='10px Share Tech Mono';CX.fillText('Waiting for metrics-server… (~60s)',w/2-130,h/2);return;}const sx=w/(HLEN-1);const p70=h-.7*h;CX.save();CX.strokeStyle='#ffcc0077';CX.setLineDash([5,4]);CX.lineWidth=1;CX.beginPath();CX.moveTo(0,p70);CX.lineTo(w,p70);CX.stroke();CX.fillStyle='#ffcc0055';CX.font='8px Share Tech Mono';CX.fillText('70% THRESHOLD',w-100,p70-3);CX.setLineDash([]);CX.restore();CX.save();CX.strokeStyle='#00ff9d33';CX.setLineDash([4,5]);CX.lineWidth=1;CX.beginPath();CX.moveTo(0,h-.5*h);CX.lineTo(w,h-.5*h);CX.stroke();CX.setLineDash([]);CX.restore();const pad=Array(HLEN-cpuH.length).fill(null).concat(cpuH);const g=CX.createLinearGradient(0,0,0,h);g.addColorStop(0,'rgba(0,212,255,.18)');g.addColorStop(1,'rgba(0,212,255,0)');CX.beginPath();let ok=false,lx=0;pad.forEach((v,i)=>{if(v===null)return;const x=i*sx,y=h-(v/100)*h;lx=x;ok?CX.lineTo(x,y):CX.moveTo(x,y);ok=true;});if(ok){CX.lineTo(lx,h);CX.lineTo(0,h);CX.closePath();CX.fillStyle=g;CX.fill();}CX.beginPath();ok=false;pad.forEach((v,i)=>{if(v===null)return;const x=i*sx,y=h-(v/100)*h;ok?CX.lineTo(x,y):CX.moveTo(x,y);ok=true;});CX.strokeStyle='#00d4ff';CX.lineWidth=1.5;CX.stroke();if(cpuH.length){const lv=cpuH[cpuH.length-1],lx2=(HLEN-1)*sx,ly=h-(lv/100)*h;CX.beginPath();CX.arc(lx2,ly,4,0,Math.PI*2);CX.fillStyle=lv>70?'#ff3d5a':lv>50?'#ffcc00':'#00d4ff';CX.fill();}}
+setInterval(()=>{const e=Math.floor((Date.now()-t0)/1000);set('hUptime',`${String(Math.floor(e/3600)).padStart(2,'0')}:${String(Math.floor((e%3600)/60)).padStart(2,'0')}:${String(e%60).padStart(2,'0')}`);if(lastPoll)set('hPoll',Math.round((Date.now()-lastPoll)/1000)+'s ago');},1000);
+window.addEventListener('resize',()=>{sizeChart();drawChart();});
+setTimeout(()=>{sizeChart();drawChart();},100);
+log('Dashboard started — connecting to backend','info','BOOT');
+log('Run: kubectl apply -f k8s/load-generator.yaml to start load','info','TIP');
+connect();
+</script>
+</body>
+</html>
