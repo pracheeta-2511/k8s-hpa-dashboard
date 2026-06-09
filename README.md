@@ -115,10 +115,10 @@ minikube stop
 ![Dashboard](screenshots/1.png)
 
 ### Pod Scaling Under Load
-![Scaling](screenshots/2.png)
+![Scaling](hpa-final/screenshots/2.png)
 
 ### Pod Scaling stops after threshold
-![Scaling](screenshots/3.png)
+![Scaling](hpa-final/screenshots/3.png)
 
 ### Pod Downscaling Under Load
-![Scaling](screenshots/4.png)
+![Scaling](hpa-final/screenshots/4.png)
